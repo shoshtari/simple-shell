@@ -42,13 +42,33 @@ int run(char** cmd, int* fdIn, int* fdOut) {
     } else {
         if (fdIn[0] != 0) {
             close(fdIn[0]);
+        }
+        if (fdIn[1] != 1) {
             close(fdIn[1]);
         }
         return pid;
     }
 }
-int main() {
-    int ret;
+
+void run_all(char*** commands, int n) {
+    int lastFD[2], stdFD[2];
+    lastFD[0] = 0;
+    lastFD[1] = 1;
+    stdFD[0] = 0;
+    stdFD[1] = 1;
+
+    for (int i = 0; i < n - 1; i++) {
+        int fd[2];
+        DO_OR_DIE(pipe(fd), "could not pipe");
+        run(commands[i], lastFD, fd);
+        lastFD[0] = fd[0];
+        lastFD[1] = fd[1];
+    }
+
+    waitpid(run(commands[n - 1], lastFD, stdFD), NULL, 0);
+}
+
+int run_hard() {
     char buf[20];
 
     int fds1[2], fds2[2], stdFd[2];
@@ -57,20 +77,8 @@ int main() {
 
     pid_t pid;
 
-    /// initiating pipes
     init_pipes(fds1, fds2);
 
-    // DO_OR_DIE(pid = fork(), "fork failed");
-
-    // if (pid == 0) {
-    //     close(fds1[0]);
-
-    //     dup2(fds1[1], 1);
-    //     close(fds1[1]);
-
-    //     execlp("cat", "cat", "/tmp/f", NULL);
-    //     return;
-    // }
     char** firstCommand = (char**)malloc(sizeof(char*) * 2);
     firstCommand[0] = "cat";
     firstCommand[1] = "/tmp/f";
@@ -85,21 +93,19 @@ int main() {
     thirdCommand[1] = "-l";
     pid = run(thirdCommand, fds2, stdFd);
     waitpid(pid, NULL, 0);
+}
 
-    // DO_OR_DIE(pid = fork(), "fork failed");
+int main() {
+    char*** commands = (char***)malloc(sizeof(char**) * 3);
+    commands[0] = (char**)malloc(sizeof(char*) * 2);
+    commands[0][0] = "cat";
+    commands[0][1] = "/tmp/f";
+    commands[1] = (char**)malloc(sizeof(char*) * 1);
+    commands[1][0] = "nl";
+    commands[2] = (char**)malloc(sizeof(char*) * 2);
+    commands[2][0] = "wc";
+    commands[2][1] = "-l";
+    run_all(commands, 3);
 
-    // if (pid == 0) {
-    //     close(fds2[1]);
-
-    //     dup2(fds2[0], 0);
-    //     close(fds2[0]);
-
-    //     execlp("wc", "wc", "-l", NULL);
-    // } else {
-    //     close(fds2[0]);
-    //     close(fds2[1]);
-
-    //     // wait(0);
-    //     waitpid(pid, NULL, 0);
-    // }
+    return 0;
 }
